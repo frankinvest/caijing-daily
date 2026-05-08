@@ -269,6 +269,12 @@ curl -sL "https://api.github.com/repos/frankinvest/caijing-daily/pages" \
 
 ## 评论提取（browser evaluate）
 
+**过滤规则**：只保留两类：
+1. **圈主 MR Dang 的评论**（楼主发的独立帖
+2. **有点击回复的评论**（任意用户发的评论，只要有人在楼下回复了内容）
+
+不保留：无回复的纯闲聊点赞、灌水评论。
+
 ```javascript
 var allItems = document.querySelectorAll('[class*="py-12"]');
 var seen = {};
@@ -277,16 +283,17 @@ var comments = [];
 for (var k = 0; k < allItems.length; k++) {
   var el = allItems[k];
   var text = el.textContent || '';
-  var match = text.match(/(\S{2,15})今天 (\d{2}:\d{2})/);
+  // 更宽松的用户名匹配（支持emoji用户名）
+  var match = text.match(/([^\s]{2,20})\s*今天\s+(\d{2}:\d{2})/);
   if (!match) continue;
   var user = match[1].trim();
   var time = match[2].trim();
-  var key = user + ':' + time + ':' + text.substring(0, 30);
+  var key = user + ':' + time + ':' + text.substring(0, 50);
   if (seen[key]) continue;
   seen[key] = true;
 
-  var timeIndex = text.indexOf('今天 ' + time);
-  var afterTime = text.substring(timeIndex + ('今天 ' + time).length).trim();
+  var timeIndex = text.indexOf(match[0]);
+  var afterTime = text.substring(timeIndex + match[0].length).trim();
   var parts = afterTime.split(/\s*回复\s*/);
   var mainContent = parts[0].replace(/^[\n\r]*/,'').trim()
     .replace(/^查看图片\s*/g, '');
@@ -296,11 +303,16 @@ for (var k = 0; k < allItems.length; k++) {
     var rt = parts[p].trim();
     if (rt.length > 0) replies.push(rt);
   }
-  comments.push({user: user, time: '今天 ' + time, content: mainContent, replies: replies});
+
+  // 过滤：只保留圈主评论 或 有点击回复的评论
+  if (user === 'MR Dang' || replies.length > 0) {
+    comments.push({user: user, time: '今天 ' + time, content: mainContent, replies: replies});
+  }
 }
 
 comments.sort(function(a, b) { return a.time.localeCompare(b.time); });
 return comments;
+```
 ```
 
 ## 格式规范
